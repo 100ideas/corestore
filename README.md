@@ -1,3 +1,40 @@
+# 2019-07-17 @100ideas fork of `@frando/corestore`
+
+changes:
+- [`fileutils()`](https://github.com/100ideas/corestore/blob/master/browser-example.js#L261) added mime-type, file type, and file encoding detectors to make it easier for the browser to correctly parse and display various file types from the in-browser hyperdrives in corestore
+	- would have been smarter to dig into the internals of hyperdrive + corestore to make them always return a `unit8` buffer for all file access, but in this case I wanted to explore how to detect different file types and content encodings
+- added special choo handlers for image files. the handler decodes/reencodes the image file from hyperdrive into a `dataurl` and creates an <img src=[dataurl]/> element that displays it
+- added `remark/rehast` linter/prettifier for markdown files
+- experimented with setting up event listeners for each hyperdrive in the corestore, example:
+	- `drive.on( 'data', () => console.log( `store:${id}::data` ) )`
+
+todo:
+- would like to use hyperdrive event listeners to trigger automatic updating of the choo UI.
+
+![2019-07-17_frando-corestore-100ideas-fork-screenshot](/2019-07-17_frando-corestore-100ideas-fork-screenshot.png)
+
+to try out:
+```bash
+git clone `https://github.com/100ideas/corestore.git corestore-playground`
+cd corestore-playground
+
+// using node v10
+npm i
+npm run dev
+// open browser to localhost:8080
+// optionally also localhost:8081
+// discovery-swarm-web launches automatically to provide local archive replication
+
+// you can try cloning my archive `dat://498427fc61bc69a2aad50c32ca926118794bd10a2f2dfc6e05a82efd3597cb2e`
+// alternatively:
+cd ..
+mkdir corestore-dat-archive
+cd corestore-dat-archive
+// copy some images, markdown, exes, pdfs etc into this directory
+dat share // give this a few secs, then ctrl-c
+dat sync  // leave this running; paste dat address into corestore at localhost:8080
+---
+
 # @frando/corestore
 
 > Experimental fork of [@andrewosh/corestore](https://github.com/andrewosh/corestore):
