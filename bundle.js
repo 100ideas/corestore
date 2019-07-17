@@ -1,0 +1,1 @@
+console.error("Error: Cannot find module '/Users/100ideas/dev/dat/frando-corestore/browser-example.js' from '/Users/100ideas/dev/dat/frando-corestore'");
