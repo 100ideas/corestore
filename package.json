@@ -62,9 +62,18 @@
     "random-access-file": "^2.1.0",
     "random-access-web": "^2.0.1",
     "randombytes": "^2.1.0",
+    "rehype-stringify": "^6.0.0",
+    "remark": "^10.0.1",
+    "remark-html": "^9.0.1",
+    "remark-parse": "^6.0.3",
+    "remark-preset-lint-recommended": "^3.0.3",
+    "remark-rehype": "^4.0.1",
     "sublevel-prefixer": "^1.0.0",
     "subleveldown": "^3.0.1",
-    "typescript": "3.3.3333"
+    "typescript": "3.3.3333",
+    "unified": "^8.3.1",
+    "unified-stream": "^1.0.5",
+    "vfile-reporter": "^6.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.5.4",

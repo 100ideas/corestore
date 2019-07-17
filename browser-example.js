@@ -1,5 +1,4 @@
 const Corestore = require('./browser')
-// var html = require('choo/html')
 var raw = require('nanohtml/raw')
 var html = require('nanohtml')
 var choo = require('choo')
@@ -9,8 +8,35 @@ const factories = { hyperdrive, hypercore }
 const _ = require( 'lodash' );
 const codecs = require('codecs')
 const identify = require('identify-filetype')
-// const mime = require('mime')
 const mime = require('mime/lite');
+
+var remark = require('remark')
+var recommended = require('remark-preset-lint-recommended')
+var rehtml = require('remark-html')
+var report = require('vfile-reporter')
+
+function remarkPromise(mdstr) {
+  console.log("returning remarkPromise")
+  return new Promise((res) => {
+    remark()
+    .use(recommended)
+    .use(rehtml)
+    .process(mdstr, function(err, file) {
+      // console.warn(report(err || file)) //dontcare
+      console.log(String(file).slice(0,100))
+      res('hi from tidy' + String(file))
+      // return String(file)
+    })
+  })
+}
+
+async function tidymark(mdstr) {
+  let tidyied0 = remarkPromise(mdstr)
+    .then(str => {console.warn; return str})
+  // let tidyied = await remarkPromise(mdstr).then(str => str)
+  console.log('tidymark: got tidyied md...')
+  return tidyied0;
+}
 
 renderApp()
 
@@ -240,11 +266,11 @@ function mainView (state, emit) {
     }
     return {
       guess: function (path, src, encoding = false) {
-        console.log(`\n\nguessing for ${path}...`)
+        // console.log(`\n\nguessing for ${path}...`)
         let mimeGuessFromPath = mime.getType(path)
         let mimeParts = _.split(_.toLower(mimeGuessFromPath), '/')
         let isSrc = _.endsWith(mimeParts[1], 'json') || _.endsWith(mimeParts[1], 'javascript')
-        console.log('mimeGuessFromPath :', mimeGuessFromPath)
+        // console.log('mimeGuessFromPath :', mimeGuessFromPath)
 
         let validEncodings = new Set(['buf', 'b64', 'str'])
         if (!validEncodings.has(encoding)) {
@@ -264,7 +290,7 @@ function mainView (state, emit) {
               encoding = 'str';
           }            
         }
-        console.log(encoding)
+        // console.log(encoding)
         let encoders = {
           buf: src => src,
           bin: src => codecs().encode(src), // TODO guess don't need both bin and b64...
@@ -282,7 +308,7 @@ function mainView (state, emit) {
         let ext = false || imgext || binext || guessedType
         let mimetype = mime.getType(ext)
         let meta = {buf, guessedType, imgext, binext, isImage, isBinary, ext, mimetype} 
-        console.log(meta, "\n#####################")
+        // console.log(meta, "\n#####################")
         return {isImage, isBinary, isSrc, ext, mimetype}
       },
       // TODO decide if useful for efficiency vs guess - probably not
@@ -308,24 +334,45 @@ function mainView (state, emit) {
           <ul>
             ${Object.entries( data ).map( ( [ path, d ], idx ) => {
               
-              // if ( _.some(extensions.img, ext => path.endsWith('.' + ext)) ){
-              // let ft = fileutils().isImg(path)
               let ft = fileutils().guess(path, d)
-              console.log("\n#########################\n", ft, "\n#########################\n")
+              // console.log("\n#########################\n", ft, "\n#########################\n")
+
               if (ft.isImage) {
                 let dataurl = `data:${ft.mimetype};base64,` + codecs('base64').decode(codecs().encode(d))
-                console.log(`file#${idx} (${ft.ext}): ` + dataurl.slice(0, 400))
-                return html`<li><strong>/${path}:</strong> <p><img src=${dataurl}/></p></li>` 
+                // console.log(`file#${idx} (${ft.ext}): ` + dataurl.slice(0, 400))
+                return html`<li><strong>/${path}:</strong> <p><img src=${dataurl}/></p></li>`
               
               } else if (ft.isSrc) {
-                let srcCode = JSON.stringify(JSON.parse(d.toString()), null, 2) // TODO add other languages, syntax highlighting
+                let srcCode = JSON.stringify(JSON.parse(d.toString(), null, 2)) // TODO add other languages, syntax highlighting
                 return html`<li><strong>/${path}:</strong><p><code class="srcCode">${srcCode}</code></p></li>`
               
+              } else if (ft.ext === 'markdown') {
+                // tidymark(d.toString()).then(tidytstr => {
+                // console.log(tidystr)
+                // })
+                // let tidier = tidymark(d.toString()).then(str => {
+                //   console.log('about to inject tidymark html into choo', str)  
+                //   return html`<li><strong>/${path}:</strong><p><code class="markdown">${str}</code></p></li>`
+                // })
+
+                let processed = remark()
+                  .use(recommended)
+                  .use(rehtml)
+                  .processSync(d.toString(), function (err, file) {
+                    // console.warn(report(err || file)) //dontcare
+                    console.log(String(file).slice(0, 100))
+                  }).toString()
+                
+                return html`<li><strong>/${path}:</strong><p><code class="markdown">${raw(processed)}</code></p></li>`
+
+                // return html`<li><strong>/${path}:</strong><p><code class="markdown">${d.toString()}</code></p></li>`
+              
+
               } else {
                 let lines = _.split(d.toString(), '\n')
                 let paras = lines.map(line => `<p>${line}</p>`).join('\n')
                 paras = html`${paras}`
-                console.log(paras)
+                console.log(paras.slice(0,100))
                 return html`<li><strong>/${path}:</strong><section>${raw(paras)}</section></li>`
               }
             })}
@@ -380,8 +427,3 @@ function formData (e) {
   data.forEach((value, key) => { object[key] = value })
   return object
 }
-
-let small16x16gif = 'data:image/gif;base64,R0lGODlhDwAPAKECAAAAzMzM/////wAAACwAAAAADwAPAAACIISPeQHsrZ5ModrLlN48CXF8m2iQ3YmmKqVlRtW4MLwWACH+H09wdGltaXplZCBieSBVbGVhZCBTbWFydFNhdmVyIQAAOw=='
-
-let fillMurray32x32_B64 = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAIAAAD8GO2jAAAKDElEQVR4ARVSVWPb3Hs/qCO0JcuOuWmTJk25Y2ZmZma6G13vi+xq92OG/8sM6QtdG2iTOODEKIulA1r28M3DP/juf/+TriUMv+8gAOBWaXeI3tQBPF6mWZbgKtUgv7gIPn92SPn0+77tFnaC5ZXcbDQuwC2jpqjAOmtTy0vVAghp2kzXbyt5mC3PVeXbvS3iWSXCU1EiRVtc2hquIwDH4728CDEBmFjnY/F0PziYysO9072J+tVvM55dTk+8iGt8q/mtYbx3a5h1ayVEdWbkcbbIqqll1phuxJnKckGwugLqCCom8EBpPtX9eHU5mU/2X4a238UGZFa9cQMZMbfszhtfef+1fy/Dkttu91u/Y9j+QfH582WyvKoA1TTDbjPIKWR5WlLTWQfVjEtFIM6lEKZxUxBfs5pCwoNXpxez6iwsDnY/yfMC4yLPs4vL1ezsvIaLOQJ/+XvfwBx8MBqfHR+fzXKvBT44oXCyd+dOZ339BoJqEUbSjhXiMuOEE0MKX4MNVVEdk2W4enk+PZ+idnfjapYcHX4pk+xifOb22k7TOT0Kt9eav/QDWzXXOxwTkvonh3tP3zn+hh/c+s83dy+CWz/WvFmjnCItTgKsSQxN/Gd/9odEsxGsm05DN1gYRSfn8zDBfQsGQVIIRJjOTPv+gyebN/ooD/7qL79ueEs7n4OEy0Et63d3DvbOv/KP/1ZoXr3nQlq1GwaVVPA4TnLG6oQCBzlGmkgLWaLIoyjKYj5sw2//Rke3Wn7TnM9XOiKqLDZ68I9/7EdvDTJeMKdODlfKN1vSsu9+z83P//eqFBEg7J2PPtgZfE+TCN2YlMiWEhNYQuaxsroOLS6yUkhZiCdf52mQbPRR14UqZhqChqf31g3LFkmQklDpObBdNk9InsYPdh6Pv7V4/+CFZTRGR8dlWuluERb7xLg3nkwJL+Z05TLTgLgQUVHxsj30KkQFFV6N9psm0rhuDK67gwolYSoCTUhtyjEJZxPd7ilbqeFFcnFyunwsCrfjCWCkWsCW3aj0+22BSjmpqgwpphGjKMdBdBSEyzgBjsxReQZhhsAa0QhPJEysGiL62g3lmoVIfavThNyz+enhJ82a63fQi89eDBzXd2JVVEo7dVsplAYqy+u6iVIpBEJKGSeqLJlh6csi1317kY8II7CCVLMrA1Z2E5AAwKhrMJoVDl4ucMSJZrXWzZr/1ut/72h7Uu5V0tRI9+P3PykiiAx6o8glrjiBpCz1w/1o78VEKEURXU2hZwxtTPVCwSUvFvvh9MTi17VrbtPr3uzw8Mr0es/2RzFJbUcLgpVhDaj+rQA5iBgb6y2CwuuiJVBKlLTIAKXUdMzk1YynlelpOalPZnYwZ35txeORbh2bYOO1j8PYNsuML8Z73/u4ngRXVrqstRpbP/i9//AP/2W596dFq2cHZR607LZZ7xKqKazpACpe5YShTrfuHExRmYUKfPJMPPvyJcPT3/jZbyjKjNWdp5/F//5BUfOr3to6xPpoFtBm+r1f+/VvvPvi8y9Ph8P+oO9X5iUANiGEsbX5KkVVBZIkycsFpJlhuhiz9prZazGZ3ZFcU3I2Oeb//DcHJjLmV+aLZ72N7a+ajU6/2H0LqmSydLDqm5rX63n/+R9f+cnv/Sk9JiSFoFAVQKJKrf/H4zUrBipcFNxrtPu9wb3t2zqmo+OTMKpOg4S0a2MuYvHk5d7j9XuDQSd58OCe3l6fhOPt4VqD5yrLEgx37j3qN5sf/OvfrUZzUKx01tP1wXIpiZDU0l1RllgWkMv1YU+jsq5b7vpsiPRH939qOX7qmp08aSCRNBL46I512EF3C9TrrPuVg1/6J8ssXxSDtrndcID7kBiVaS5yYkXJrG60iQKwyIXJHABZVq5sAzVdDyrUpet17+L87GlX99WVBavQ4mAOpJlY9zZtZptVok+f83Aq50VJjYZLg+l8sX3ncUHBYvVKI5ZudmtWHSlMZCnzUPISIK0SZbyaLBUiJHUMczjc/o6kbCmtZTb7OVe0qlpO106MIgcZ56sg//jgYhbmUkY/9O1f1e27s2hRinK2uNQMHVFSVSHBGguyVMs5dfU8AxRoIpFn43m9lkHO1Ayno7zWNBGtQ+hly2CyFAZhRexNxmJ2FbpdFmphx12b7F/Oc+H2OmU++vav7hQcUUBs2ye6ydyGo/KCQHndQOVwtYwTPQV2BRdnIK8iPfv4k39vUPt4dNR7sFXz7qAk1AIajiUXmOtQ2+iU89TQs6bdbrU8tz/QqKpIXWflwatdksRLqusyT8s4om5TgsrxTE03ZIlXAs5Edqgt2SO2nITDzces68+KVbHK2WIVqjJ2oPT6l8uoMctaXRuXeNBhdtOmANO6m6enUX6J6jYWlc4VTYMwDhNio9t3+1yKi+mogGIxj+vQsSVpuU0h4dno/NkbbwXL8wnJxqAaq2oqIs8wn3+6/5UP5/3hbUcHeRpSWy8FgcpjrIssE2PNgpVelRWBKM7neg01Gg2N9Wsg++qtluN0T8+LYnrZE6ffdoNsD0zXaZ4LvUTY0LAGSbJcPpt/ef/bH9a6kCDou7dKae7vH88X45C/IqWEZr0s8nZ1LuXVtBqQXDBsJ1fHU+n5IJqWSn3VwwfWWq0OteliF8GI5yswXmFPVTfveKg8+XzS39y51etSTqGz+Os3pvEE/MnPG5dFQJMaQVIDFsM8yhEmmlZlYcKzmmU+3Oi+vTvyXWZrQdehlmOE0xlYZqC7wwmzKgyAOjmdXa4mDze2v/4bvwHocYpIVfkXk5Xf1AyzmU6cCXPw7/z6r1wX5kLlYaZUlrMZkAZQom6z3adnh2crh3in53OJQI4FYvBwVPznV/59Pg8vR7Miyu63W7ZhU03zyfF1fa3sfs936KwSPLriaZKWNYIwKONUUllhBAg26wZKYVjEXCU/8j07//PR4ev/89FlPMH/wxWz3bpdzq7idIrW9Lu3d25t+VvN5ovL5bSMfKNWplnLX8Epvtlxji4X8So13CYhMC0J0gvIa5oQGEcy4pIBYHgeBeLrH257Fds92VucTq9mUxxHay33yfAOAHB7Z8D01NHNDEyOjp5/5zf8DAjk5PzU623OgnkW4JILqs3RZDJilUTEsN2aU3O5tBCnGBGL6UGMPnr/k26T2Ihaa52b91sNX/gNp9P0hm1mWZJBjDOWzCZPBl1xgiipVuklV1MbkJY+abpLXZgkS+Pp8WWEpG0Ay8LM6paRCEXsQP3g9MtWh/oDvD1xvhjxKDQd696aR3zL9F0DGgYRWGVClbmrugZ1zvOrHCRZQSI6x6ZmwvW0jMjdW9tPn09FwfN6XgjUNOqrLMKUr/Ji9/PXHt362izzOzoKquWt+xtrN4bYZrTShZwdzrJmw12lybQIav724Wz/+erD7xzezVHx7qHYRnGrkUji/B+Js7JPGdrHowAAAABJRU5ErkJggg==
-`
