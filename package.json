@@ -41,6 +41,7 @@
   "dependencies": {
     "acorn": "^6.2.0",
     "choo": "^6.13.1",
+    "choo-devtools": "^3.0.0",
     "codecs": "^2.0.0",
     "dat-encoding": "^5.0.1",
     "dat-swarm-defaults": "^1.0.1",

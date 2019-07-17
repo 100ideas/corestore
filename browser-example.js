@@ -15,11 +15,12 @@ var recommended = require('remark-preset-lint-recommended')
 var rehtml = require('remark-html')
 var report = require('vfile-reporter')
 
+window._ = _
+
 function remarkPromise(mdstr) {
   console.log("returning remarkPromise")
   return new Promise((res) => {
     remark()
-    .use(recommended)
     .use(rehtml)
     .process(mdstr, function(err, file) {
       // console.warn(report(err || file)) //dontcare
@@ -47,6 +48,7 @@ function makeStore (name) {
 
 function renderApp () {
   var app = choo()
+  app.use(require('choo-devtools')())
   app.use(uiStore)
   app.route('/', mainView)
   app.mount('body')
@@ -55,6 +57,7 @@ function renderApp () {
 function uiStore (state, emitter) {
   state.list = {}
   state.data = {}
+  state.meta = {}
   state.ui = {}
 
   const store = makeStore('store')
@@ -62,10 +65,7 @@ function uiStore (state, emitter) {
     .then( update )
     .then(
       store.list().then( storeList => {
-        console.log(storeList)
         let keys = [...storeList.keys()]
-        console.log( keys[ 0 ] )
-        store.info(keys[0]).then(console.log)
         return keys
       })
       .then( keys => keys.map( ( key, idx ) => addHyperListeners( store, key, idx ) ) )
@@ -84,7 +84,6 @@ function uiStore (state, emitter) {
       drive.on('upload', () => console.log(`store:${id}::upload`))
       drive.on('sync', () => console.log(`store:${id}::sync`))
       drive.on('close', () => console.log(`store:${id}::close`))
-      console.log("added listeners to content stream")
   
       drive.metadata.on('append', () => console.log(`store:${id}:metadata::append`))
       drive.metadata.on('data', () => console.log(`store:${id}:metadata::data`))
@@ -96,7 +95,6 @@ function uiStore (state, emitter) {
         readHyperdrive(key)
       })
       drive.metadata.on( 'close', () => console.log( `store:${id}:metadata::close` ) )  
-      console.log("added listeners to metadata stream")
     })
   }
 
@@ -132,12 +130,13 @@ function uiStore (state, emitter) {
     }
     let changes = _.difference(_.keys(list), oldListKeys)
     if(changes.length > 0) console.log('update - stream keys changed: ', changes)
-    console.log('new state.list', list)
+    console.log('updated archives in state.list', [...list.keys()])
     render()
   }
 
   async function readHyperdrive (key) {
     state.data[key] = {}
+    state.meta[key] = []
     const drive = await store.get(key)
     await drive.ready()
     const meta = {
@@ -155,6 +154,8 @@ function uiStore (state, emitter) {
           if (err) throw err
           // state.data[key][path] = data.toString()  //BUG toString() messes up binary files (imgs)
           state.data[key][path] = data
+          let sorted = _.sortBy(_.keys(state.data[key]))
+          _.set(state.meta, key, sorted)
           render()
         }
       }
@@ -194,7 +195,7 @@ function uiStore (state, emitter) {
   }
 
   function render () {
-    console.log('render', state)
+    // console.log('render', state) // using choo-devtools instead
     emitter.emit('render')
   }
 }
@@ -257,10 +258,15 @@ function mainView (state, emit) {
     if (!key) return 'nothing open'
     const info = state.list[key]
     const data = state.data[key]
+    const meta = state.meta[key]
+    // ${Object.entries( data ).map( ( [ path, d ], idx ) => {
+    // ${data.map( ( [ path, d ], idx ) => {
+    const sorted = meta.map(fname => [fname, data[fname]])
     const writable = info.meta && info.meta.writable
     const debug = html`<pre>${JSON.stringify(info, true, 2)}</pre>`
     let bytype
-    if (info.type === 'hyperdrive') bytype = hyperdrive(key, data, writable)
+    // if (info.type === 'hyperdrive') bytype = hyperdrive(key, data, writable)
+    if (info.type === 'hyperdrive') bytype = hyperdrive(key, sorted, writable)
     if (info.type === 'hypercore') bytype = hypercore(key, data, writable)
     return html`
       <div class="core-view">
@@ -347,7 +353,7 @@ function mainView (state, emit) {
       <div class="listing" style="width:50vw;">
         ${data ? html`
           <ul>
-            ${Object.entries( data ).map( ( [ path, d ], idx ) => {
+              ${data.map( ( [ path, d ], idx ) => {
               
               let ft = fileutils().guess(path, d)
               // console.log("\n#########################\n", ft, "\n#########################\n")
@@ -362,32 +368,18 @@ function mainView (state, emit) {
                 return html`<li><strong>/${path}:</strong><p><code class="srcCode">${srcCode}</code></p></li>`
               
               } else if (ft.ext === 'markdown') {
-                // tidymark(d.toString()).then(tidytstr => {
-                // console.log(tidystr)
-                // })
-                // let tidier = tidymark(d.toString()).then(str => {
-                //   console.log('about to inject tidymark html into choo', str)  
-                //   return html`<li><strong>/${path}:</strong><p><code class="markdown">${str}</code></p></li>`
-                // })
-
                 let processed = remark()
                   .use(recommended)
                   .use(rehtml)
                   .processSync(d.toString(), function (err, file) {
                     // console.warn(report(err || file)) //dontcare
-                    console.log(String(file).slice(0, 100))
                   }).toString()
-                
                 return html`<li><strong>/${path}:</strong><p><code class="markdown">${raw(processed)}</code></p></li>`
-
-                // return html`<li><strong>/${path}:</strong><p><code class="markdown">${d.toString()}</code></p></li>`
-              
 
               } else {
                 let lines = _.split(d.toString(), '\n')
                 let paras = lines.map(line => `<p>${line}</p>`).join('\n')
                 paras = html`${paras}`
-                console.log(paras.slice(0,100))
                 return html`<li><strong>/${path}:</strong><section>${raw(paras)}</section></li>`
               }
             })}
