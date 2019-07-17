@@ -1,5 +1,7 @@
 const Corestore = require('./browser')
-var html = require('choo/html')
+// var html = require('choo/html')
+var raw = require('nanohtml/raw')
+var html = require('nanohtml')
 var choo = require('choo')
 const hyperdrive = require('hyperdrive')
 const hypercore = require('hypercore')
@@ -233,74 +235,98 @@ function mainView (state, emit) {
   function fileutils() {
     const exts = {
       img: ['jpg', 'png', 'gif', 'bmp', 'tif', 'tiff', 'svg'],
-      bin: ['rar', 'zip', 'gz', 'msi', 'iso', 'rtf', 'avi', 'wmv', 'wma', 'swf', 'flv', 'mid', 'pdf', 'doc', 'docx', 'mp3', 'nif', 'ico', 'psd']
+      bin: ['rar', 'zip', 'gz', 'msi', 'iso', 'rtf', 'avi', 'wmv', 'wma', 'swf', 'flv', 'mid', 'pdf', 'doc', 'docx', 'mp3', 'nif', 'ico', 'psd'],
+      txt: ['md', 'js', 'json', 'txt'] // TODO use this array
     }
     return {
-      guess: function (src, encoding = false) {
+      guess: function (path, src, encoding = false) {
+        console.log(`\n\nguessing for ${path}...`)
+        let mimeGuessFromPath = mime.getType(path)
+        let mimeParts = _.split(_.toLower(mimeGuessFromPath), '/')
+        let isSrc = _.endsWith(mimeParts[1], 'json') || _.endsWith(mimeParts[1], 'javascript')
+        console.log('mimeGuessFromPath :', mimeGuessFromPath)
+
         let validEncodings = new Set(['buf', 'b64', 'str'])
         if (!validEncodings.has(encoding)) {
-          encoding = _.isTypedArray(src) || _.isBuffer(src) ? 'buf' : 'b64'
+          
+          switch (mimeParts[0]) {
+            case 'image':
+              encoding = 'b64'
+              break;
+            case 'text':
+              encoding = 'str'
+              break;
+            case 'application':
+              encoding = isSrc ? 'str' : 'bin'
+              break;
+            default:
+              console.warn(`warn: not sure what encoding for ${path} (${mimeGuessFromPath}), defaulting to utf8 string`)
+              encoding = 'str';
+          }            
         }
-        console.log("\n\nguessing...")
         console.log(encoding)
         let encoders = {
           buf: src => src,
-          bin: src => codecs().encode(d),
-          b64: src => codecs('base64').encode(src),
-          str: src => codecs('utf8').encode(src) // treat as string or binary
+          bin: src => codecs().encode(src), // TODO guess don't need both bin and b64...
+          b64: src => codecs().encode(src),
+          str: src => codecs('utf8').encode(src.toString()) // treat as string or binary
         }
         let buf = encoders[encoding](src)
-        let guessedType = identify(buf);
+        //TODO using mime package this way is circular? is it any better than just grabbing the .ext?
+        let guessedType = identify(buf) || mime.getExtension(mimeGuessFromPath);
         let imgext = _.find(exts.img, ext => ext === guessedType)
         let binext = _.find(exts.bin, ext => ext === guessedType)
         let isImage = imgext ? true : false
         let isBinary = binext ? true : false
+        // let isSrc = see above
         let ext = false || imgext || binext || guessedType
         let mimetype = mime.getType(ext)
         let meta = {buf, guessedType, imgext, binext, isImage, isBinary, ext, mimetype} 
         console.log(meta, "\n#####################")
-        return {isImage, isBinary, ext, mimetype}
+        return {isImage, isBinary, isSrc, ext, mimetype}
       },
-      isImg: function (path) {
-        let imgext = false
-        if (_.some(exts.img, ext => {
-          if (path.endsWith('.' + ext)) {
-            imgext = ext
-            return true;
-          }
-        }))
-        return imgext
-          ? {isImage: true, ext: imgext, mimetype: `image/${imgext}`}
-          : {isImage: false, ext: 'false', mimetype: `text`}
-      }
+      // TODO decide if useful for efficiency vs guess - probably not
+      // isImg: function (path) {
+      //   let imgext = false
+      //   if (_.some(exts.img, ext => {
+      //     if (path.endsWith('.' + ext)) {
+      //       imgext = ext
+      //       return true;
+      //     }
+      //   }))
+      //   return imgext
+      //     ? {isImage: true, ext: imgext, mimetype: `image/${imgext}`}
+      //     : {isImage: false, ext: 'false', mimetype: `text`}
+      // }
     };
   }
 
   function hyperdrive (key, data, writable) {
     return html`
-      <div>
+      <div class="listing" style="width:50vw;">
         ${data ? html`
           <ul>
             ${Object.entries( data ).map( ( [ path, d ], idx ) => {
               
               // if ( _.some(extensions.img, ext => path.endsWith('.' + ext)) ){
-              let ft = fileutils().isImg(path)
-              let _ft = fileutils().guess(codecs().encode(d))
-              console.log("\n#########################\n", _ft, "\n#########################\n")
+              // let ft = fileutils().isImg(path)
+              let ft = fileutils().guess(path, d)
+              console.log("\n#########################\n", ft, "\n#########################\n")
               if (ft.isImage) {
                 let dataurl = `data:${ft.mimetype};base64,` + codecs('base64').decode(codecs().encode(d))
                 console.log(`file#${idx} (${ft.ext}): ` + dataurl.slice(0, 400))
-                return html`<li><strong>/${path}:</strong> <img src=${dataurl}/> png should be here</li>` 
+                return html`<li><strong>/${path}:</strong> <p><img src=${dataurl}/></p></li>` 
               
-              } else if (path.endsWith('NOT_ENABLED')) {
-                let gifB64 = 'data:image/gif;base64,' + btoa(unescape(encodeURIComponent(d)))
-                console.log( 'trying to encode ' + path + ' ...' )
-                console.log("raw from dat: \n", d)
-                console.log( 'gif#' + idx + " b64 encoding hopefully?\n: " + gifB64 )
-                return html`<li><strong>/${path}:</strong> <img src=${gifB64}/> tinygif should be here</li>`
+              } else if (ft.isSrc) {
+                let srcCode = JSON.stringify(JSON.parse(d.toString()), null, 2) // TODO add other languages, syntax highlighting
+                return html`<li><strong>/${path}:</strong><p><code class="srcCode">${srcCode}</code></p></li>`
               
               } else {
-                return html`<li><strong>/${path}:</strong> ${d.toString()}</li>`
+                let lines = _.split(d.toString(), '\n')
+                let paras = lines.map(line => `<p>${line}</p>`).join('\n')
+                paras = html`${paras}`
+                console.log(paras)
+                return html`<li><strong>/${path}:</strong><section>${raw(paras)}</section></li>`
               }
             })}
           </ul>
