@@ -52,17 +52,6 @@ function renderApp () {
   app.mount('body')
 }
 
-function addHyperListeners( store, key, id = 'missing' ) {
-  store.get( key ).then( drive => {
-    drive.on( 'append', () => console.log( `store:${id}::append` ) )
-    drive.on( 'data', () => console.log( `store:${id}::data` ) )
-    drive.on( 'download', () => console.log( `store:${id}::download` ) )
-    drive.on( 'upload', () => console.log( `store:${id}::upload` ) )
-    drive.on( 'sync', () => console.log( `store:${id}::sync` ) )
-    drive.on( 'close', () => console.log( `store:${id}::close` ) )  
-  })
-}
-
 function uiStore (state, emitter) {
   state.list = {}
   state.data = {}
@@ -86,6 +75,31 @@ function uiStore (state, emitter) {
   emitter.on('hyperdrive:writeFile', onwritefile)
   emitter.on('hypercore:append', onappend)
   emitter.on('ui:open', onopen)
+
+  function addHyperListeners( store, key, id = 'missing' ) {
+    store.get(key).then(drive => {
+      drive.on('append', () => console.log(`store:${id}::append`))
+      drive.on('data', () => console.log(`store:${id}::data`))
+      drive.on('download', () => console.log(`store:${id}::download`))
+      drive.on('upload', () => console.log(`store:${id}::upload`))
+      drive.on('sync', () => console.log(`store:${id}::sync`))
+      drive.on('close', () => console.log(`store:${id}::close`))
+      console.log("added listeners to content stream")
+  
+      drive.metadata.on('append', () => console.log(`store:${id}:metadata::append`))
+      drive.metadata.on('data', () => console.log(`store:${id}:metadata::data`))
+      drive.metadata.on('download', () => console.log(`store:${id}:metadata::download`))
+      drive.metadata.on('upload', () => console.log(`store:${id}:metadata::upload`))
+      drive.metadata.on('sync', () => {
+        console.warn(`store:${id}:metadata::sync`)
+        console.log('trying to update UI...')
+        readHyperdrive(key)
+      })
+      drive.metadata.on( 'close', () => console.log( `store:${id}:metadata::close` ) )  
+      console.log("added listeners to metadata stream")
+    })
+  }
+
 
   async function onopen (key) {
     state.ui.open = key
@@ -117,7 +131,8 @@ function uiStore (state, emitter) {
       state.list[key] = info
     }
     let changes = _.difference(_.keys(list), oldListKeys)
-    console.log('update - changed keys: ', changes )
+    if(changes.length > 0) console.log('update - stream keys changed: ', changes)
+    console.log('new state.list', list)
     render()
   }
 
