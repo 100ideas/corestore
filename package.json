@@ -6,7 +6,19 @@
   "browser": "browser.js",
   "scripts": {
     "test": "standard && tape test/*.js",
-    "example": "cd example; npm install && npm run dev"
+    "example": "cd example; npm install && npm run dev",
+    "watch": "watchify browser-example.js --debug -o bundle.js -v",
+    "dss": "./node_modules/.bin/discovery-swarm-web",
+    "server": "http-server .",
+    "server2": "http-server -p 8081 .",
+    "dev": "run-p watch dss server server2",
+    "build": "browserify browser.js -p tinyify > bundle.js"
+  },
+  "browserify": {},
+  "browserify2": {
+    "transform": [
+      "babelify"
+    ]
   },
   "publishConfig": {
     "access": "public"
@@ -27,6 +39,9 @@
   },
   "homepage": "https://github.com/andrewosh/corestore#readme",
   "dependencies": {
+    "acorn": "^6.2.0",
+    "choo": "^6.13.1",
+    "codecs": "^2.0.0",
     "dat-encoding": "^5.0.1",
     "dat-swarm-defaults": "^1.0.1",
     "debug": "^3.1.0",
@@ -35,24 +50,37 @@
     "fs-extra": "^6.0.1",
     "hypercore": "^6.25.0",
     "hypercore-protocol": "^6.6.4",
+    "hyperdrive": "9.14.3",
+    "identify-filetype": "^1.0.0",
     "level": "^4.0.0",
     "level-browserify": "^2.0.0",
+    "lodash": "^4.17.14",
     "lru": "^3.1.0",
+    "mime": "^2.4.4",
     "mutexify": "^1.2.0",
     "random-access-file": "^2.1.0",
     "random-access-web": "^2.0.1",
     "randombytes": "^2.1.0",
     "sublevel-prefixer": "^1.0.0",
-    "subleveldown": "^3.0.1"
+    "subleveldown": "^3.0.1",
+    "typescript": "3.3.3333"
   },
   "devDependencies": {
+    "@babel/core": "^7.5.4",
+    "@babel/preset-env": "^7.5.4",
+    "babelify": "^10.0.0",
+    "browserify": "^16.2.3",
     "encoding-down": "^6.0.2",
+    "http-server": "^0.11.1",
     "level-mem": "^3.0.1",
     "levelup": "^4.0.1",
     "memdown": "^4.0.0",
     "mkdirp": "^0.5.1",
+    "npm-run-all": "^4.1.5",
     "random-access-memory": "^3.1.1",
     "standard": "^11.0.1",
-    "tape": "^4.9.0"
+    "tape": "^4.9.0",
+    "tinyify": "^2.5.0",
+    "watchify": "^3.11.1"
   }
 }
